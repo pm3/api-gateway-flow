@@ -1,0 +1,50 @@
+code: flow1
+steps:
+  - code: step1
+    workers:
+      - code: worker_11
+        path: /flow/sum
+        method: POST
+        params:
+          $a: case.params.a
+          $b: case.params.b
+
+  - code: step2
+    workers:
+
+      - code: worker_21
+        path: /flow/sum
+        method: POST
+        params:
+          $a: step.step1.worker_11.c
+          b: "2"
+
+      - code: worker_22
+        path: /flow/sum
+        method: POST
+        params:
+          $a: worker_21.c
+          b: "3"
+
+      - code: worker_23
+        path: /flow/sum
+        method: POST
+        params:
+          $a: worker_22.c
+          $b: "4"
+
+  - code: step3
+    workers:
+
+      - code: worker_31
+        path: /flow/sum
+        method: POST
+        params:
+          $a: step.step2.worker_23.c
+          b: "5"
+
+response:
+  $sum: step.step3.worker_31.c
+labels:
+  label1: label1
+  label2: label2

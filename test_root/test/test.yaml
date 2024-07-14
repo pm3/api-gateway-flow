@@ -1,0 +1,9 @@
+code: test
+name: base test
+adminUsers:
+  - login: aston
+    password: c465235bb8a2fa3c14c5a72484fb2635c180d3db626a1b34ab7e12d53749094d
+jwtIssuers:
+labels:
+  label1: value1
+  label2: value2
