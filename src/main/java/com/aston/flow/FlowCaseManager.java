@@ -106,15 +106,17 @@ public class FlowCaseManager {
         return flowCase;
     }
 
-    public void finishTask(String taskId, Object response, String error) {
+    public void finishTask(String taskId, int statusCode, Object response) {
         FlowTaskEntity taskEntity = taskStore.loadById(taskId)
                                              .orElseThrow(()->new UserException("undefined taskId "+taskId));
         if(taskEntity.getFinished()!=null){
             throw new UserException("task is finished "+taskId);
         }
-        if(error==null){
+        String error = null;
+        if(statusCode>=200 && statusCode<300){
             taskStore.finishFlowOk(taskId, response);
         } else {
+            error = response!=null?response.toString():"null";
             taskStore.finishFlowError(taskId, Map.of("error", error));
         }
 
@@ -125,7 +127,7 @@ public class FlowCaseManager {
         FlowDef flowDef = flowDefStore.flowDef(flowCase.getTenant(), flowCase.getCaseType());
         FlowWorkerDef workerDef = flowDefStore.cacheWorker(flowDef, taskEntity.getStep(), taskEntity.getWorker());
 
-        spanSender.finishRunningTask(flowCase, taskEntity, workerDef, error);
+        spanSender.finishRunningTask(flowCase, taskEntity, workerDef, statusCode, error);
         spanSender.finishTask(flowCase, taskEntity, workerDef);
 
         nextTask1(taskEntity.getFlowCaseId(), taskId);

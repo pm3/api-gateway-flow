@@ -128,6 +128,7 @@ public class ZipkinSpanSender implements ISpanSender {
         span.setParentId(task.getId().substring(0,16));
         span.setTimestamp(task.getCreated().toEpochMilli()*1000);
         span.setDuration(Duration.between(task.getCreated(), task.getStarted()).toMillis()*1000);
+        if(span.getDuration()<3000) span.setDuration(3000);
         span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+(task.getAssetId()!=null ? "/"+task.getAssetId() : "")+"/"+task.getWorker()));
         if(error!=null){
             span.setTags(new HashMap<>());
@@ -139,7 +140,7 @@ public class ZipkinSpanSender implements ISpanSender {
     }
 
     @Override
-    public void finishRunningTask(FlowCaseEntity flowCase, FlowTaskEntity task, FlowWorkerDef workerDef, String error) {
+    public void finishRunningTask(FlowCaseEntity flowCase, FlowTaskEntity task, FlowWorkerDef workerDef, int statusCode, String error) {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
         span.setName("task-running");

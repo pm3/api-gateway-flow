@@ -25,7 +25,6 @@ public class TestTaskSender implements ITaskSender {
         executor.execute(()->{
             try{
                 Thread.sleep(100);
-                String error = null;
                 Map<String, Object> resp = new HashMap<>();
                 if(path.equals("/flow/echo") && params instanceof Map paramsMap){
                     resp.putAll(paramsMap);
@@ -41,10 +40,10 @@ public class TestTaskSender implements ITaskSender {
                     resp.put("c", c);
                     if(c>100) throw new Exception("big sun "+c);
                 }
-                flowCaseManager.finishTask(task.getId(), resp, error);
+                flowCaseManager.finishTask(task.getId(), 200, resp);
             }catch (Exception e){
                 e.printStackTrace();
-                flowCaseManager.finishTask(task.getId(), null, e.getMessage());
+                flowCaseManager.finishTask(task.getId(), 400, e.getMessage());
             }
         });
     }

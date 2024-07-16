@@ -30,15 +30,15 @@ steps:
 
   - code: finish
     workers:
-      - code: prepare
+      - code: calculate
         path: /flow/sum
         method: POST
         params:
-          $a: case.paramsa.a
+          $a: case.params.a
           $b: case.params.b
 
 response:
-  $sum: step.finish.
+  $sum: step.finish.calculate
 labels:
   label1: label1
   label2: label2

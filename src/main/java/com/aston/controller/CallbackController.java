@@ -40,16 +40,16 @@ public class CallbackController {
                          @Body byte[] data,
                          @Parameter(hidden = true) UserContext userContext){
 
-        boolean ok = callbackStatus==null || (callbackStatus>=200 && callbackStatus<299);
+        if(callbackStatus==null) callbackStatus = 200;
         try {
-            if(ok){
+            if(callbackStatus>=200 && callbackStatus<300) {
                 Object root = objectMapper.readValue(data, Object.class);
-                flowCaseManager.finishTask(taskId, root, null);
+                flowCaseManager.finishTask(taskId, callbackStatus, root);
             } else {
-                flowCaseManager.finishTask(taskId, null, new String(data, StandardCharsets.UTF_8));
+                flowCaseManager.finishTask(taskId, callbackStatus, new String(data, StandardCharsets.UTF_8));
             }
         }catch (Exception e){
-            flowCaseManager.finishTask(taskId, null, "parse json body error "+e.getMessage());
+            flowCaseManager.finishTask(taskId, 400, "parse json body error "+e.getMessage());
             throw new UserException("body not parse to json");
         }
     }
