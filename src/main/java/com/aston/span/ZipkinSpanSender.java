@@ -176,6 +176,9 @@ public class ZipkinSpanSender implements ISpanSender {
         span.getTags().put("step", task.getStep());
         if(task.getAssetId()!=null) span.getTags().put("assetId", task.getAssetId());
         span.getTags().put("worker", workerDef.getCode());
+        if(workerDef.getLabels()!=null){
+            workerDef.getLabels().forEach((k,v)->span.getTags().put("worker."+k, v));
+        }
         cache.add(span);
         sendCache(List.of(span));
     }
