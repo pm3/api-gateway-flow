@@ -92,9 +92,7 @@ public class FlowCaseController {
         if(full!=null && full){
             future = future.thenApply(this::loadFullFlow);
         }
-        if(flowCase!=null && flowCase.getAssets()!=null) {
-            future = future.thenApply(this::createAssetsUrl);
-        }
+        future = future.thenApply(this::createAssetsUrl);
         return future;
     }
 

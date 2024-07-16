@@ -16,6 +16,7 @@ import com.aston.flow.store.IFlowTaskStore;
 import com.aston.model.FlowCase;
 import com.aston.model.FlowCaseCreate;
 import com.aston.model.IdValue;
+import com.aston.span.ISpanSender;
 import com.aston.user.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micronaut.http.MediaType;
@@ -26,7 +27,7 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-@MicronautTest
+@MicronautTest(environments = {"local"})
 @SuppressWarnings("unchecked")
 public class MnFlowTest {
     @Inject
@@ -43,7 +44,8 @@ public class MnFlowTest {
                 application.getApplicationContext().getBean(IFlowTaskStore.class),
                 taskSender,
                 application.getApplicationContext().getBean(FlowDefStore.class),
-                application.getApplicationContext().getBean(WaitingFlowCaseManager.class)
+                application.getApplicationContext().getBean(WaitingFlowCaseManager.class),
+                application.getApplicationContext().getBean(ISpanSender.class)
         );
         taskSender.setFlowCaseManager(flowCaseManager);
         return flowCaseManager;
@@ -62,6 +64,7 @@ public class MnFlowTest {
         UserContext userContext = new UserContext("test", "aston");
         FlowCaseController flowCaseController = flowCaseController();
         IdValue value = flowCaseController.createCase(create, userContext);
+        System.out.println(value.id());
         FlowCase flowCase = null;
         for(int i=0;i<40; i++) {
             CompletableFuture<FlowCase> future = flowCaseController.fetchCase(value.id(), 5, false, userContext);

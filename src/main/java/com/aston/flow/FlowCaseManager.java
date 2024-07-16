@@ -21,6 +21,7 @@ import com.aston.model.def.FlowDef;
 import com.aston.model.def.FlowStepDef;
 import com.aston.model.def.FlowStepType;
 import com.aston.model.def.FlowWorkerDef;
+import com.aston.span.ISpanSender;
 import com.aston.user.UserException;
 import com.aston.utils.FlowScript;
 import jakarta.inject.Singleton;
@@ -39,6 +40,7 @@ public class FlowCaseManager {
     private final ITaskSender taskSender;
     private final FlowDefStore flowDefStore;
     private final WaitingFlowCaseManager waitingFlowCaseManager;
+    private final ISpanSender spanSender;
     private final ConcurrentHashMap<String, String> nextTasks = new ConcurrentHashMap<>();
 
     public FlowCaseManager(BlobStore blobStore,
@@ -46,13 +48,14 @@ public class FlowCaseManager {
                            IFlowTaskStore taskStore,
                            ITaskSender taskSender,
                            FlowDefStore flowDefStore,
-                           WaitingFlowCaseManager waitingFlowCaseManager) {
+                           WaitingFlowCaseManager waitingFlowCaseManager, ISpanSender spanSender) {
         this.blobStore = blobStore;
         this.caseStore = caseStore;
         this.taskStore = taskStore;
         this.taskSender = taskSender;
         this.flowDefStore = flowDefStore;
         this.waitingFlowCaseManager = waitingFlowCaseManager;
+        this.spanSender = spanSender;
     }
 
     public void createFlow(String tenant, String id, FlowCaseCreate caseCreate) {
@@ -90,6 +93,7 @@ public class FlowCaseManager {
         entity.setCreated(Instant.now());
         entity.setState("created");
         caseStore.insert(entity);
+        spanSender.createFlow(entity);
         nextTask1(id, id);
     }
 
@@ -102,17 +106,27 @@ public class FlowCaseManager {
         return flowCase;
     }
 
-    public void finishTask(String taskId, boolean ok, Object response) {
+    public void finishTask(String taskId, Object response, String error) {
         FlowTaskEntity taskEntity = taskStore.loadById(taskId)
                                              .orElseThrow(()->new UserException("undefined taskId "+taskId));
         if(taskEntity.getFinished()!=null){
             throw new UserException("task is finished "+taskId);
         }
-        if(ok){
+        if(error==null){
             taskStore.finishFlowOk(taskId, response);
         } else {
-            taskStore.finishFlowError(taskId, response);
+            taskStore.finishFlowError(taskId, Map.of("error", error));
         }
+
+        FlowCaseEntity flowCase = caseStore.loadById(taskEntity.getFlowCaseId())
+                                           .orElseThrow(()->new UserException("undefined flowId "+taskEntity.getFlowCaseId()));
+        taskEntity.setFinished(Instant.now());
+        spanSender.finishRunningTask(flowCase, taskEntity, error);
+
+        FlowDef flowDef = flowDefStore.flowDef(flowCase.getTenant(), flowCase.getCaseType());
+        FlowWorkerDef workerDef = flowDefStore.cacheWorker(flowDef, taskEntity.getStep(), taskEntity.getWorker());
+        spanSender.finishTask(flowCase, taskEntity, workerDef);
+
         nextTask1(taskEntity.getFlowCaseId(), taskId);
     }
 
@@ -270,27 +284,30 @@ public class FlowCaseManager {
         }
         String error = null;
         try{
-            sendTaskHttp(script, workerDef, task);
+            sendTaskHttp(script, workerDef, flowCaseEntity, task);
             task.setStarted(Instant.now());
+            spanSender.finishWaitingTask(flowCaseEntity, task, null);
         }catch (WaitingException e) {
                 throw e;
         }catch (TaskResponseException e) {
             error = e.getMessage();
         }catch (OgnlException e) {
+            LOGGER.warn("ognl exception {}",e.getMessage());
             error = "parse params error "+e.getMessage();
         }catch (Exception e) {
+            LOGGER.warn("run task exception {}",e.getMessage());
             error = "send to worker error "+e.getMessage();
         }
         if(error!=null){
-            if(newTask){
-                task.setStarted(task.getCreated());
-                task.setFinished(task.getCreated());
-                task.setError(Map.of("error", error));
-                nextTask1(task.getFlowCaseId(), task.getId());
-            } else {
+            task.setStarted(task.getCreated());
+            task.setFinished(task.getCreated());
+            task.setError(Map.of("error", error));
+            if(!newTask){
                 taskStore.finishFlowError(task.getId(), Map.of("error", error));
-                nextTask1(task.getFlowCaseId(), task.getId());
             }
+            spanSender.finishWaitingTask(flowCaseEntity, task, error);
+            spanSender.finishTask(flowCaseEntity, task, workerDef);
+            nextTask1(task.getFlowCaseId(), task.getId());
         }
         return true;
     }
@@ -298,6 +315,7 @@ public class FlowCaseManager {
     private void saveResponseAndFinish(FlowDef flowDef, FlowCaseEntity flowCaseEntity) {
         List<FlowTaskEntity> tasks = taskStore.selectTaskByCaseId(flowCaseEntity.getId());
         Map<String, Object> response = null;
+        String error = null;
         if(flowDef.getResponse()!=null) {
             try{
                 FlowScript script = FlowScriptBuilder.createTaskCtx(flowCaseEntity, tasks, null, null);
@@ -305,14 +323,20 @@ public class FlowCaseManager {
             }catch (Exception e){
                 LOGGER.debug("error calculate flow response {} error {}", flowDef.getResponse(), e.getMessage());
                 response = Map.of("error", e.getMessage());
+                error = e.getMessage();
             }
         }
         caseStore.finishFlow(flowCaseEntity.getId(), response);
+        flowCaseEntity.setResponse(response);
+        flowCaseEntity.setFinished(Instant.now());
+        flowCaseEntity.setState("FINISHED");
+
         //save to blob and clean db
         FlowCase flowCase = caseStore.loadFlowCaseById(flowCaseEntity.getId());
         flowCase.setTasks(taskStore.selectFlowTaskByCaseId(flowCaseEntity.getId()));
         try{
-            blobStore.saveFinalCase(flowCaseEntity.getTenant(), flowCaseEntity.getId(), flowCase);
+            blobStore.saveFinalCase(flowCase.getTenant(), flowCase.getId(), flowCase);
+            spanSender.finishFlow(flowCaseEntity, flowDef, error);
             taskStore.deleteTasksByCaseId(flowCaseEntity.getId());
         }catch (Exception e){
             LOGGER.warn("saveFinalCase {}", e.getMessage(), e);
@@ -321,7 +345,7 @@ public class FlowCaseManager {
     }
 
     @SuppressWarnings("rawtypes")
-    private void sendTaskHttp(FlowScript script, FlowWorkerDef workerDef, FlowTaskEntity task) throws Exception {
+    private void sendTaskHttp(FlowScript script, FlowWorkerDef workerDef, FlowCaseEntity flowCase, FlowTaskEntity task) throws Exception {
 
         String path = workerDef.getPath();
 

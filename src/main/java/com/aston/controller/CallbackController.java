@@ -1,5 +1,6 @@
 package com.aston.controller;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import com.aston.flow.FlowCaseManager;
@@ -41,10 +42,14 @@ public class CallbackController {
 
         boolean ok = callbackStatus==null || (callbackStatus>=200 && callbackStatus<299);
         try {
-            Object root = objectMapper.readValue(data, Object.class);
-            flowCaseManager.finishTask(taskId, ok, root);
+            if(ok){
+                Object root = objectMapper.readValue(data, Object.class);
+                flowCaseManager.finishTask(taskId, root, null);
+            } else {
+                flowCaseManager.finishTask(taskId, null, new String(data, StandardCharsets.UTF_8));
+            }
         }catch (Exception e){
-            flowCaseManager.finishTask(taskId, false, Map.of("error","body not parse to json "+e.getMessage()));
+            flowCaseManager.finishTask(taskId, null, "parse json body error "+e.getMessage());
             throw new UserException("body not parse to json");
         }
     }

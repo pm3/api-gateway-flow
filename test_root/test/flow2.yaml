@@ -6,7 +6,7 @@ steps:
         path: /flow/sum
         method: POST
         params:
-          $a: case.paramsa.a
+          $a: case.params.a
           $b: case.params.b
 
   - code: photos
@@ -28,8 +28,17 @@ steps:
           $a: worker_1.c
           b: "3"
 
+  - code: finish
+    workers:
+      - code: prepare
+        path: /flow/sum
+        method: POST
+        params:
+          $a: case.paramsa.a
+          $b: case.params.b
+
 response:
-  $sum: step
+  $sum: step.finish.
 labels:
   label1: label1
   label2: label2
