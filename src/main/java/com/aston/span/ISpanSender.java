@@ -13,7 +13,7 @@ public interface ISpanSender {
 
     void finishWaitingTask(FlowCaseEntity flowCase, FlowTaskEntity task, String error);
 
-    void finishRunningTask(FlowCaseEntity flowCase, FlowTaskEntity task, String error);
+    void finishRunningTask(FlowCaseEntity flowCase, FlowTaskEntity task, FlowWorkerDef workerDef, String error);
 
     void finishTask(FlowCaseEntity flowCase, FlowTaskEntity task, FlowWorkerDef workerDef);
 }

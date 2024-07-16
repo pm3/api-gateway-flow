@@ -121,10 +121,11 @@ public class FlowCaseManager {
         FlowCaseEntity flowCase = caseStore.loadById(taskEntity.getFlowCaseId())
                                            .orElseThrow(()->new UserException("undefined flowId "+taskEntity.getFlowCaseId()));
         taskEntity.setFinished(Instant.now());
-        spanSender.finishRunningTask(flowCase, taskEntity, error);
 
         FlowDef flowDef = flowDefStore.flowDef(flowCase.getTenant(), flowCase.getCaseType());
         FlowWorkerDef workerDef = flowDefStore.cacheWorker(flowDef, taskEntity.getStep(), taskEntity.getWorker());
+
+        spanSender.finishRunningTask(flowCase, taskEntity, workerDef, error);
         spanSender.finishTask(flowCase, taskEntity, workerDef);
 
         nextTask1(taskEntity.getFlowCaseId(), taskId);
@@ -299,8 +300,8 @@ public class FlowCaseManager {
             error = "send to worker error "+e.getMessage();
         }
         if(error!=null){
-            task.setStarted(task.getCreated());
-            task.setFinished(task.getCreated());
+            task.setStarted(Instant.now());
+            task.setFinished(task.getStarted());
             task.setError(Map.of("error", error));
             if(!newTask){
                 taskStore.finishFlowError(task.getId(), Map.of("error", error));

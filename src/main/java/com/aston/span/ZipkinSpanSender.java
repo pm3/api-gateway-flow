@@ -82,12 +82,12 @@ public class ZipkinSpanSender implements ISpanSender {
     public void createFlow(FlowCaseEntity flowCase) {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
-        span.setName("/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/start-flow");
+        span.setName("flow-start");
         span.setId(createId());
         span.setParentId(flowCase.getId().substring(0,16));
         span.setTimestamp(flowCase.getCreated().toEpochMilli()*1000);
         span.setDuration(1000);
-        span.setLocalEndpoint(new ZipkinEndpoint("flow"));
+        span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()));
         cache.add(span);
         sendCache(List.of(span));
     }
@@ -96,25 +96,25 @@ public class ZipkinSpanSender implements ISpanSender {
     public void finishFlow(FlowCaseEntity flowCase, FlowDef flowDef, String error) {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
-        span.setName("/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/finished");
+        span.setName("flow");
         span.setId(flowCase.getId().substring(0,16));
         span.setTimestamp(flowCase.getCreated().toEpochMilli()*1000);
         span.setDuration(Duration.between(flowCase.getCreated(), flowCase.getFinished()).toMillis()*1000);
-        span.setLocalEndpoint(new ZipkinEndpoint("flow"));
+        span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()));
         span.setTags(new HashMap<>());
         if(error!=null) {
             span.getTags().put("error", error);
             span.setName(span.getName()+" error");
         }
         if(flowDef.getLabels()!=null && !flowDef.getLabels().isEmpty()){
-            span.getTags().putAll(flowDef.getLabels());
+            flowDef.getLabels().forEach((k,v)->span.getTags().put("flow."+k, v));
         }
         if(flowCase.getExternalId()!=null) {
-            span.getTags().put("externalId", flowCase.getExternalId());
+            span.getTags().put("case.externalId", flowCase.getExternalId());
         }
-        span.getTags().put("flowId", flowCase.getId());
+        span.getTags().put("case.id", flowCase.getId());
+        span.getTags().put("case.type", flowCase.getCaseType());
         span.getTags().put("tenant", flowCase.getTenant());
-        span.getTags().put("caseType", flowCase.getCaseType());
         cache.add(span);
         sendCache(List.of(span));
     }
@@ -123,12 +123,12 @@ public class ZipkinSpanSender implements ISpanSender {
     public void finishWaitingTask(FlowCaseEntity flowCase, FlowTaskEntity task, String error) {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
-        span.setName("/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+"/"+task.getWorker()+"/waiting");
+        span.setName("task-waiting");
         span.setId(createId());
         span.setParentId(task.getId().substring(0,16));
         span.setTimestamp(task.getCreated().toEpochMilli()*1000);
         span.setDuration(Duration.between(task.getCreated(), task.getStarted()).toMillis()*1000);
-        span.setLocalEndpoint(new ZipkinEndpoint("flow"));
+        span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+(task.getAssetId()!=null ? "/"+task.getAssetId() : "")+"/"+task.getWorker()));
         if(error!=null){
             span.setTags(new HashMap<>());
             span.getTags().put("error", error);
@@ -139,20 +139,23 @@ public class ZipkinSpanSender implements ISpanSender {
     }
 
     @Override
-    public void finishRunningTask(FlowCaseEntity flowCase, FlowTaskEntity task, String error) {
+    public void finishRunningTask(FlowCaseEntity flowCase, FlowTaskEntity task, FlowWorkerDef workerDef, String error) {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
-        span.setName("/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+"/"+task.getWorker()+"/running");
+        span.setName("task-running");
         span.setId(createId());
         span.setParentId(task.getId().substring(0,16));
         span.setTimestamp(task.getStarted().toEpochMilli()*1000);
         span.setDuration(Duration.between(task.getStarted(), task.getFinished()).toMillis()*1000);
-        span.setLocalEndpoint(new ZipkinEndpoint("flow"));
+        span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+(task.getAssetId()!=null ? "/"+task.getAssetId() : "")+"/"+task.getWorker()));
+        span.setTags(new HashMap<>());
         if(error!=null){
-            span.setTags(new HashMap<>());
             span.getTags().put("error", error);
             span.setName(span.getName()+" error");
         }
+        span.getTags().put("http.method", workerDef.getMethod());
+        span.getTags().put("http.path", workerDef.getPath()!=null? workerDef.getPath() : workerDef.getPathExpr());
+        span.getTags().put("http.status_code", task.getError()!=null ? "400":"200");
         cache.add(span);
         sendCache(List.of(span));
     }
@@ -161,11 +164,11 @@ public class ZipkinSpanSender implements ISpanSender {
     public void finishTask(FlowCaseEntity flowCase, FlowTaskEntity task, FlowWorkerDef workerDef) {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
-        span.setName("/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+"/"+task.getWorker());
+        span.setName("task");
         span.setId(task.getId().substring(0,16));
         span.setTimestamp(task.getCreated().toEpochMilli()*1000);
         span.setDuration(Duration.between(task.getCreated(), task.getFinished()).toMillis()*1000);
-        span.setLocalEndpoint(new ZipkinEndpoint("flow"));
+        span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+(task.getAssetId()!=null ? "/"+task.getAssetId() : "")+"/"+task.getWorker()));
         span.setTags(new HashMap<>());
         if(workerDef.getLabels()!=null && !workerDef.getLabels().isEmpty()){
             span.getTags().putAll(workerDef.getLabels());
@@ -173,9 +176,6 @@ public class ZipkinSpanSender implements ISpanSender {
         span.getTags().put("step", task.getStep());
         if(task.getAssetId()!=null) span.getTags().put("assetId", task.getAssetId());
         span.getTags().put("worker", workerDef.getCode());
-        span.getTags().put("http.method", workerDef.getMethod());
-        span.getTags().put("http.path", workerDef.getPath()!=null? workerDef.getPath() : workerDef.getPathExpr());
-        span.getTags().put("http.status_code", task.getError()!=null ? "400":"200");
         cache.add(span);
         sendCache(List.of(span));
     }
