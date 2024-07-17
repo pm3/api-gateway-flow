@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -96,10 +97,10 @@ public class ZipkinSpanSender implements ISpanSender {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
         span.setName("flow-start");
-        span.setId(createId());
-        span.setParentId(flowCase.getId().substring(0,16));
+        span.setId(flowCase.getId().substring(0,15)+"1");
         span.setTimestamp(flowCase.getCreated().toEpochMilli()*1000);
-        span.setDuration(1000);
+        span.setDuration(Duration.between(flowCase.getCreated(), Instant.now()).toMillis()*1000);
+        if(span.getDuration()<3000) span.setDuration(3000);
         span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()));
         cacheAdd(span);
     }
@@ -109,7 +110,7 @@ public class ZipkinSpanSender implements ISpanSender {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
         span.setName("flow");
-        span.setId(flowCase.getId().substring(0,16));
+        span.setId(flowCase.getId().substring(0,15)+"0");
         span.setTimestamp(flowCase.getCreated().toEpochMilli()*1000);
         span.setDuration(Duration.between(flowCase.getCreated(), flowCase.getFinished()).toMillis()*1000);
         span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()));
@@ -135,8 +136,8 @@ public class ZipkinSpanSender implements ISpanSender {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
         span.setName("task-waiting");
-        span.setId(createId());
-        span.setParentId(task.getId().substring(0,16));
+        span.setId(task.getId().substring(0,15)+"1");
+        span.setParentId(task.getId().substring(0,15)+"0");
         span.setTimestamp(task.getCreated().toEpochMilli()*1000);
         span.setDuration(Duration.between(task.getCreated(), task.getStarted()).toMillis()*1000);
         if(span.getDuration()<3000) span.setDuration(3000);
@@ -154,8 +155,8 @@ public class ZipkinSpanSender implements ISpanSender {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
         span.setName("task-running");
-        span.setId(createId());
-        span.setParentId(task.getId().substring(0,16));
+        span.setId(task.getId().substring(0,15)+"2");
+        span.setParentId(task.getId().substring(0,15)+"0");
         span.setTimestamp(task.getStarted().toEpochMilli()*1000);
         span.setDuration(Duration.between(task.getStarted(), task.getFinished()).toMillis()*1000);
         span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+"/"+task.getWorker()));
@@ -175,7 +176,7 @@ public class ZipkinSpanSender implements ISpanSender {
         ZipkinSpan span = new ZipkinSpan();
         span.setTraceId(flowCase.getId());
         span.setName("task");
-        span.setId(task.getId().substring(0,16));
+        span.setId(task.getId().substring(0,15)+"0");
         span.setTimestamp(task.getCreated().toEpochMilli()*1000);
         span.setDuration(Duration.between(task.getCreated(), task.getFinished()).toMillis()*1000);
         span.setLocalEndpoint(new ZipkinEndpoint("/flow/"+flowCase.getTenant()+"/"+flowCase.getCaseType()+"/"+task.getStep()+"/"+task.getWorker()));
