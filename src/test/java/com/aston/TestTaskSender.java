@@ -24,7 +24,7 @@ public class TestTaskSender implements ITaskSender {
     public void sendTask(FlowTaskEntity task, String method, String path, Map<String, String> headers, Object params) {
         executor.execute(()->{
             try{
-                Thread.sleep(100);
+                Thread.sleep(10);
                 Map<String, Object> resp = new HashMap<>();
                 if(path.equals("/flow/echo") && params instanceof Map paramsMap){
                     resp.putAll(paramsMap);
