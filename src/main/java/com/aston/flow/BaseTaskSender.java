@@ -50,6 +50,8 @@ public class BaseTaskSender implements ITaskSender {
         }
         b.header("x-flow-id", task.getFlowCaseId());
         b.header("x-flow-task-id", task.getId());
+        b.header("X-B3-TraceId", task.getFlowCaseId());
+        b.header("X-B3-SpanId", task.getId().substring(0,15)+"2");
         String callbackPath = "/api-gateway-flow/response/"+ task.getId();
         b.header("x-gw-callback", new URI(appConfig.getFlowAppUrl()).resolve(callbackPath).toString());
         String apiKey = workerApiKey!=null ? Hash.hmacSha1(callbackPath.getBytes(StandardCharsets.UTF_8), workerApiKey) : "1234567890";
