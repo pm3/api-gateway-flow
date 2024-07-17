@@ -60,6 +60,7 @@ public class FlowCaseManager {
 
     public void createFlow(String tenant, String id, FlowCaseCreate caseCreate) {
 
+        Instant created = Instant.now();
         FlowDef flowDef = flowDefStore.flowDef(tenant, caseCreate.caseType());
         if(flowDef==null){
             throw new UserException("invalid case type, tenant="+tenant+" case="+caseCreate.caseType());
@@ -90,7 +91,7 @@ public class FlowCaseManager {
         entity.setCallback(caseCreate.callback());
         entity.setParams(caseCreate.params());
         entity.setAssets(flowAssets);
-        entity.setCreated(Instant.now());
+        entity.setCreated(created);
         entity.setState("created");
         caseStore.insert(entity);
         spanSender.createFlow(entity);

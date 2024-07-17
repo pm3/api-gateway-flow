@@ -3,17 +3,21 @@ package com.aston.controller;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import com.aston.blob.BlobStore;
 import com.aston.flow.FlowCaseManager;
+import com.aston.flow.FlowDefStore;
 import com.aston.flow.WaitingFlowCaseManager;
 import com.aston.model.Callback;
 import com.aston.model.FlowAsset;
 import com.aston.model.FlowCase;
 import com.aston.model.FlowCaseCreate;
 import com.aston.model.IdValue;
+import com.aston.model.def.FlowDef;
+import com.aston.user.AuthException;
 import com.aston.user.UserContext;
 import com.aston.user.UserException;
 import com.aston.utils.BaseValid;
@@ -21,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.MapType;
 import io.micronaut.core.annotation.NonNull;
 import io.micronaut.core.annotation.Nullable;
+import io.micronaut.http.HttpRequest;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
@@ -35,6 +40,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import ognl.Ognl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,20 +53,81 @@ import org.slf4j.LoggerFactory;
 public class FlowCaseController {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(FlowCaseController.class);
+    public static final String X_FLOW_CALLBACK = "x-flow-callback-";
 
     private final FlowCaseManager flowCaseManager;
+    private final FlowDefStore flowDefStore;
     private final WaitingFlowCaseManager waitingFlowCaseManager;
     private final BlobStore blobStore;
     private final ObjectMapper objectMapper;
 
-    public FlowCaseController(FlowCaseManager flowCaseManager,
+    public FlowCaseController(FlowCaseManager flowCaseManager, FlowDefStore flowDefStore,
                               WaitingFlowCaseManager waitingFlowCaseManager,
                               BlobStore blobStore,
                               ObjectMapper objectMapper) {
         this.flowCaseManager = flowCaseManager;
+        this.flowDefStore = flowDefStore;
         this.waitingFlowCaseManager = waitingFlowCaseManager;
         this.blobStore = blobStore;
         this.objectMapper = objectMapper;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Operation(tags = {"case"})
+    @Post("/start/{tenant}/{caseType}")
+    public IdValue createCase(@PathVariable String tenant,
+                              @PathVariable String caseType,
+                              HttpRequest<Map<String, Object>> request,
+                              @Parameter(hidden = true) UserContext userContext) {
+        BaseValid.str(caseType, 1, 128, "caseType");
+        if(!Objects.equals(tenant, userContext.tenant())){
+            throw new AuthException("invalid tenant path", true);
+        }
+        FlowDef flowDef = flowDefStore.flowDef(tenant, caseType);
+        if(flowDef==null){
+            throw new UserException("invalid case type, tenant="+tenant+" case="+caseType);
+        }
+        Map<String, Object> params = request.getBody().orElse(new HashMap<>());
+        List<String> assets = null;
+        if(flowDef.getParamsAssetExpr()!=null){
+            try{
+                Object val = Ognl.getValue(flowDef.getParamsAssetExpr(), params);
+                if(val instanceof List<?> l)
+                    assets = (List<String>) l.stream().filter(s -> s instanceof String).toList();
+                else if(val instanceof String s){
+                    assets = List.of(s);
+                }
+            }catch (Exception e){
+                throw new UserException("error read assets from params, tenant="+tenant+" case="+caseType);
+            }
+        }
+        String externalId = null;
+        if(flowDef.getParamsExternalIdExpr()!=null){
+            try{
+                Object val = Ognl.getValue(flowDef.getParamsExternalIdExpr(), params);
+                if(val instanceof String s){
+                    externalId = s;
+                }
+            }catch (Exception e){
+                throw new UserException("error read externalId from params, tenant="+tenant+" case="+caseType);
+            }
+            BaseValid.str(externalId, -1, 128, "externalId");
+        }
+        Callback callback = null;
+        String callbackUrl = request.getHeaders().get("x-flow-callback");
+        if(callbackUrl!=null){
+            Map<String, String> callbackHeaders = new HashMap<>();
+            request.getHeaders().forEach((k, v)->{
+                if(k.startsWith(X_FLOW_CALLBACK)){
+                    callbackHeaders.put(k.substring(X_FLOW_CALLBACK.length()), v.getFirst());
+                }
+            });
+            callback = new Callback(callbackUrl, callbackHeaders);
+        }
+        FlowCaseCreate create = new FlowCaseCreate(caseType, externalId, assets, params, callback);
+        String caseId = UUID.randomUUID().toString().replaceAll("-", "");
+        flowCaseManager.createFlow(userContext.tenant(), caseId, create);
+        return new IdValue(caseId);
     }
 
     @Operation(tags = {"case"})

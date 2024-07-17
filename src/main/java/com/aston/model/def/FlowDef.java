@@ -12,6 +12,9 @@ public final class FlowDef {
     private Map<String, Object> response;
     private Map<String, String> labels;
 
+    private String paramsAssetExpr;
+    private String paramsExternalIdExpr;
+
     public String getTenant() {
         return tenant;
     }
@@ -66,6 +69,22 @@ public final class FlowDef {
 
     public void setLabels(Map<String, String> labels) {
         this.labels = labels;
+    }
+
+    public String getParamsAssetExpr() {
+        return paramsAssetExpr;
+    }
+
+    public void setParamsAssetExpr(String paramsAssetExpr) {
+        this.paramsAssetExpr = paramsAssetExpr;
+    }
+
+    public String getParamsExternalIdExpr() {
+        return paramsExternalIdExpr;
+    }
+
+    public void setParamsExternalIdExpr(String paramsExternalIdExpr) {
+        this.paramsExternalIdExpr = paramsExternalIdExpr;
     }
 
     @Override

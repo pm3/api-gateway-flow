@@ -17,6 +17,7 @@ import com.aston.model.FlowCase;
 import com.aston.model.FlowCaseCreate;
 import com.aston.model.IdValue;
 import com.aston.span.ISpanSender;
+import com.aston.span.ZipkinSpanSender;
 import com.aston.user.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micronaut.http.MediaType;
@@ -38,6 +39,9 @@ public class MnFlowTest {
 
     public FlowCaseManager flowCaseManager(){
         TestTaskSender taskSender = new TestTaskSender();
+        ISpanSender spanSender = application.getApplicationContext().getBean(ISpanSender.class);
+        if(spanSender instanceof ZipkinSpanSender zsp) zsp.setDisableCache(true);
+
         FlowCaseManager flowCaseManager = new FlowCaseManager(
                 application.getApplicationContext().getBean(BlobStore.class),
                 application.getApplicationContext().getBean(IFlowCaseStore.class),
@@ -45,7 +49,7 @@ public class MnFlowTest {
                 taskSender,
                 application.getApplicationContext().getBean(FlowDefStore.class),
                 application.getApplicationContext().getBean(WaitingFlowCaseManager.class),
-                application.getApplicationContext().getBean(ISpanSender.class)
+                spanSender
         );
         taskSender.setFlowCaseManager(flowCaseManager);
         return flowCaseManager;
@@ -54,6 +58,7 @@ public class MnFlowTest {
     public FlowCaseController flowCaseController(){
         return new FlowCaseController(
                 flowCaseManager(),
+                application.getApplicationContext().getBean(FlowDefStore.class),
                 application.getApplicationContext().getBean(WaitingFlowCaseManager.class),
                 application.getApplicationContext().getBean(BlobStore.class),
                 objectMapper
