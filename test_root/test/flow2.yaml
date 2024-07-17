@@ -42,3 +42,5 @@ response:
 labels:
   label1: label1
   label2: label2
+paramsAssetExpr: asset
+paramsExternalIdExpr: externalId

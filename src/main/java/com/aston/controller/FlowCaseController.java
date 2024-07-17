@@ -75,7 +75,7 @@ public class FlowCaseController {
     @SuppressWarnings("unchecked")
     @Operation(tags = {"case"})
     @Post("/start/{tenant}/{caseType}")
-    public IdValue createCase(@PathVariable String tenant,
+    public IdValue createCaseFromParams(@PathVariable String tenant,
                               @PathVariable String caseType,
                               HttpRequest<Map<String, Object>> request,
                               @Parameter(hidden = true) UserContext userContext) {
@@ -107,6 +107,8 @@ public class FlowCaseController {
                 Object val = Ognl.getValue(flowDef.getParamsExternalIdExpr(), params);
                 if(val instanceof String s){
                     externalId = s;
+                } else if(val instanceof Number n){
+                    externalId = n.toString();
                 }
             }catch (Exception e){
                 throw new UserException("error read externalId from params, tenant="+tenant+" case="+caseType);

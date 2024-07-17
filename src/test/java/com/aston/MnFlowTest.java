@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import com.aston.blob.BlobStore;
 import com.aston.controller.FlowCaseController;
@@ -20,7 +21,9 @@ import com.aston.span.ISpanSender;
 import com.aston.span.ZipkinSpanSender;
 import com.aston.user.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micronaut.http.HttpRequest;
 import io.micronaut.http.MediaType;
+import io.micronaut.http.MutableHttpRequest;
 import io.micronaut.http.multipart.CompletedFileUpload;
 import io.micronaut.runtime.EmbeddedApplication;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
@@ -70,17 +73,21 @@ public class MnFlowTest {
         FlowCaseController flowCaseController = flowCaseController();
         IdValue value = flowCaseController.createCase(create, userContext);
         System.out.println(value.id());
-        FlowCase flowCase = null;
+        return waitForFinish(flowCaseController, value.id(), userContext);
+    }
+
+    private static FlowCase waitForFinish(FlowCaseController flowCaseController, String id,
+                                        UserContext userContext) throws InterruptedException, ExecutionException {
         for(int i=0;i<40; i++) {
-            CompletableFuture<FlowCase> future = flowCaseController.fetchCase(value.id(), 5, false, userContext);
-            flowCase = future.get();
-            if(flowCase.getFinished()!=null) break;
+            CompletableFuture<FlowCase> future = flowCaseController.fetchCase(id, 5, false, userContext);
+            FlowCase flowCase = future.get();
+            if(flowCase!=null && flowCase.getFinished()!=null) return flowCase;
             try{
                 Thread.sleep(250);
             }catch (Exception ignore){
             }
         }
-        return flowCase;
+        return null;
     }
 
     @Test
@@ -91,7 +98,6 @@ public class MnFlowTest {
                                                                MediaType.TEXT_PLAIN_TYPE, "test".getBytes(StandardCharsets.UTF_8));
         IdValue value = flowCaseController.createAsset(file,null,null, null, null, null, userContext);
         System.out.println(value.id());
-
     }
 
     //assets
@@ -123,6 +129,22 @@ public class MnFlowTest {
         Assertions.assertNotNull(flowCase.getFinished(), "not finished case");
         Assertions.assertNotNull(flowCase.getResponse(), "case response");
         Assertions.assertInstanceOf(Map.class, flowCase.getResponse());
+    }
+
+    @Test
+    public void test3() throws Exception {
+        Map<String, Object> params = new HashMap<>();
+        params.put("a", "1");
+        params.put("b", "1");
+        params.put("asset", "d7f3ef99771445988a2f7163594e5cdd");
+        params.put("externalId", System.currentTimeMillis());
+        MutableHttpRequest<Map<String, Object>> request = HttpRequest.POST("/api-gateway-flow/start/test/flow2", params);
+        UserContext userContext = new UserContext("test", "aston");
+        FlowCaseController flowCaseController = flowCaseController();
+        IdValue value = flowCaseController.createCaseFromParams("test", "flow2", request, userContext);
+        System.out.println(value.id());
+        FlowCase flowCase = waitForFinish(flowCaseController, value.id(), userContext);
+        System.out.println(objectMapper.writeValueAsString(flowCase));
     }
 
 }
