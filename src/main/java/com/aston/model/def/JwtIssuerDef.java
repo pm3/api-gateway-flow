@@ -2,9 +2,8 @@ package com.aston.model.def;
 
 public class JwtIssuerDef {
     private String issuer;
-    private String url;
     private String aud;
-    private String tenant;
+    private String url;
 
     public String getIssuer() {
         return issuer;
@@ -12,14 +11,6 @@ public class JwtIssuerDef {
 
     public void setIssuer(String issuer) {
         this.issuer = issuer;
-    }
-
-    public String getUrl() {
-        return url;
-    }
-
-    public void setUrl(String url) {
-        this.url = url;
     }
 
     public String getAud() {
@@ -30,16 +21,16 @@ public class JwtIssuerDef {
         this.aud = aud;
     }
 
-    public String getTenant() {
-        return tenant;
+    public String getUrl() {
+        return url;
     }
 
-    public void setTenant(String tenant) {
-        this.tenant = tenant;
+    public void setUrl(String url) {
+        this.url = url;
     }
 
     @Override
     public String toString() {
-        return "JwtIssuerDef{" + "issuer='" + issuer + '\'' + ", tenant='" + tenant + '\'' + '}';
+        return "JwtIssuerDef{" + "issuer='" + issuer + '\'' + ", aud='" + aud + '\'' + ", url='" + url + '\'' + '}';
     }
 }

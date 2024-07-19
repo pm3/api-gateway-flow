@@ -108,9 +108,8 @@ public class FlowDefStore {
             BaseValid.require(issuer, "issuer");
             BaseValid.require(issuer.getIssuer(), "issuer.issuer");
             BaseValid.require(issuer.getAud(), "issuer.audience");
-            BaseValid.require(issuer.getUrl(), "issuer.ur");
-            issuer.setTenant(tenantDef.getCode());
-            jwtVerify.addIssuerConfigMap(issuer);
+            BaseValid.require(issuer.getUrl(), "issuer.url");
+            jwtVerify.addIssuer(issuer.getIssuer(), issuer.getAud(), issuer.getUrl(), tenantDef.getCode());
         }
 
         LOGGER.info("start load tenant {} flows", dir.getName());

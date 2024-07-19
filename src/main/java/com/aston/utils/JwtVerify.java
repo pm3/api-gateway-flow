@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.aston.model.def.JwtIssuerDef;
 import com.aston.user.UserContext;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
@@ -33,7 +32,7 @@ public class JwtVerify {
     private final static Logger LOGGER = LoggerFactory.getLogger(JwtVerify.class);
 
     private final Map<String, KeyConfig> keyConfigs = new ConcurrentHashMap<>();
-    private final Map<String, JwtIssuerDef> issuerConfigMap = new HashMap<>();
+    private final Map<String, IssuerCfg> issuerConfigMap = new HashMap<>();
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
 
@@ -42,8 +41,8 @@ public class JwtVerify {
         this.objectMapper = objectMapper;
     }
 
-    public void addIssuerConfigMap(JwtIssuerDef config) {
-        issuerConfigMap.put(config.getIssuer() + "#" + config.getAud(), config);
+    public void addIssuer(String issuer, String aud, String url, String tenant){
+        issuerConfigMap.put(issuer + "#" + aud, new IssuerCfg(issuer, aud, url, tenant));
     }
 
     public UserContext verify(DecodedJWT jwt) throws Exception {
@@ -51,20 +50,20 @@ public class JwtVerify {
         if (keyConfig == null) createVerifiers(jwt.getIssuer(), jwt.getAudience());
         keyConfig = keyConfigs.get(jwt.getKeyId());
         if (keyConfig == null) throw new Exception("invalid keyId");
-        JWT.require(keyConfig.algorithm).withAudience(keyConfig.issuerConfig.getAud()).build().verify(jwt);
+        JWT.require(keyConfig.algorithm).withAudience(keyConfig.issuerConfig.aud()).build().verify(jwt);
         String user = jwt.getClaim("email").asString();
         if(user==null) user = jwt.getSubject();
-        return new UserContext(keyConfig.issuerConfig.getTenant(), user);
+        return new UserContext(keyConfig.issuerConfig.tenant(), user);
     }
 
     private void createVerifiers(String issuer, List<String> audiences) throws Exception {
         if (issuer == null || audiences == null) throw new Exception("invalid jwt, issuer and audience is required");
-        JwtIssuerDef issuerConfig = null;
+        IssuerCfg issuerConfig = null;
         for (Iterator<String> i = audiences.iterator(); issuerConfig == null && i.hasNext(); ) {
             issuerConfig = issuerConfigMap.get(issuer + "#" + i.next());
         }
         if (issuerConfig == null) throw new Exception("unsupported issuer " + issuer);
-        List<OpenIdKey> keys = loadKeys(issuerConfig.getUrl());
+        List<OpenIdKey> keys = loadKeys(issuerConfig.url());
         for (OpenIdKey key : keys) {
             if (key == null || key.e() == null || key.n() == null) continue;
             BigInteger e = new BigInteger(1, Base64.getUrlDecoder().decode(key.e()));
@@ -96,12 +95,14 @@ public class JwtVerify {
         issuerConfigMap.clear();
     }
 
+    public record IssuerCfg(String issuer, String aud, String url, String tenant){}
+
     public record OpenIdKeys(List<OpenIdKey> keys){}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record OpenIdKey(String kid, String e, String n){}
 
-    public record KeyConfig(String keyId, Algorithm algorithm, JwtIssuerDef issuerConfig){}
+    public record KeyConfig(String keyId, Algorithm algorithm, IssuerCfg issuerConfig){}
 
     public static class PublicKeyProvider implements RSAKeyProvider {
         private final RSAPublicKey publicKey;
