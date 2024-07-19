@@ -14,6 +14,7 @@ public class FlowWorkerDef {
     private Map<String, Object> params;
     private String where;
     private Map<String, String> labels;
+    private boolean blocked;
 
     public String getCode() {
         return code;
@@ -77,6 +78,14 @@ public class FlowWorkerDef {
 
     public void setLabels(Map<String, String> labels) {
         this.labels = labels;
+    }
+
+    public boolean isBlocked() {
+        return blocked;
+    }
+
+    public void setBlocked(boolean blocked) {
+        this.blocked = blocked;
     }
 
     @Override

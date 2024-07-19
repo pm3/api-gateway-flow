@@ -16,15 +16,16 @@ public class TestTaskSender implements ITaskSender {
     private final Executor executor = Executors.newSingleThreadExecutor();
     private Random random = new Random();
 
+    @Override
     public void setFlowCaseManager(FlowCaseManager flowCaseManager) {
         this.flowCaseManager = flowCaseManager;
     }
 
     @Override
-    public void sendTask(FlowTaskEntity task, String method, String path, Map<String, String> headers, Object params) {
+    public void sendTask(FlowTaskEntity task, String method, String path, Map<String, String> headers, Object params, boolean blocked) {
         executor.execute(()->{
             try{
-                Thread.sleep(10);
+                //Thread.sleep(10);
                 Map<String, Object> resp = new HashMap<>();
                 if(path.equals("/flow/echo") && params instanceof Map paramsMap){
                     resp.putAll(paramsMap);

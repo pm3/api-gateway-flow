@@ -56,6 +56,7 @@ public class FlowCaseManager {
         this.flowDefStore = flowDefStore;
         this.waitingFlowCaseManager = waitingFlowCaseManager;
         this.spanSender = spanSender;
+        taskSender.setFlowCaseManager(this);
     }
 
     public void createFlow(String tenant, String id, FlowCaseCreate caseCreate) {
@@ -162,9 +163,7 @@ public class FlowCaseManager {
                 for(FlowTaskEntity task : stepWaitingTasks) {
                     try{
                         boolean run = checkWaitingTask(flowDef, flowCaseEntity, tasks, task, false);
-                        if(run) {
-                            taskStore.startRunning(task.getId());
-                        } else {
+                        if(!run) {
                             taskStore.deleteTask(task.getId());
                             tasks.remove(task);
                         }
@@ -242,13 +241,8 @@ public class FlowCaseManager {
         for(FlowTaskEntity task : newTasks){
             try{
                 boolean run = checkWaitingTask(flowDef, flowCaseEntity, tasks, task, true);
-                if(run){
-                    //running task
-                    if(task.getStarted()==null) {
-                        task.setStarted(Instant.now());
-                    }
-                    taskStore.insert(task);
-                } else {
+                //running task is saved
+                if(!run) {
                     //task where condition is false
                     tasks.remove(task);
                 }
@@ -288,9 +282,7 @@ public class FlowCaseManager {
         }
         String error = null;
         try{
-            sendTaskHttp(script, workerDef, flowCaseEntity, task);
-            task.setStarted(Instant.now());
-            spanSender.finishWaitingTask(flowCaseEntity, task, null);
+            sendTaskHttp(script, workerDef, flowCaseEntity, task, newTask);
         }catch (WaitingException e) {
                 throw e;
         }catch (TaskResponseException e) {
@@ -349,7 +341,8 @@ public class FlowCaseManager {
     }
 
     @SuppressWarnings("rawtypes")
-    private void sendTaskHttp(FlowScript script, FlowWorkerDef workerDef, FlowCaseEntity flowCase, FlowTaskEntity task) throws Exception {
+    private void sendTaskHttp(FlowScript script, FlowWorkerDef workerDef, FlowCaseEntity flowCase, FlowTaskEntity task,
+                              boolean newTask) throws Exception {
 
         String path = workerDef.getPath();
 
@@ -371,6 +364,13 @@ public class FlowCaseManager {
                 params = paramsMap.get("$.");
             }
         }
-        taskSender.sendTask(task, workerDef.getMethod(), path, headers, params);
+        task.setStarted(Instant.now());
+        if(newTask){
+            taskStore.insert(task);
+        } else {
+            taskStore.startRunning(task.getId());
+        }
+        spanSender.finishWaitingTask(flowCase, task, null);
+        taskSender.sendTask(task, workerDef.getMethod(), path, headers, params, workerDef.isBlocked());
     }
 }
